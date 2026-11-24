@@ -1,10 +1,15 @@
 import { joinRoom, selfId } from 'https://esm.run/trystero@0.26.0';
-const APP_ID='peerdrop-upes-p2p-files-v2', MAX=2*1024*1024*1024, CHUNK=128*1024;
-const $=id=>document.getElementById(id); const S={room:null,id:'',name:'',peers:new Map(),a:{},incoming:new Map(),transfers:new Map(),cancelled:new Set()};
-const uid=()=>`${selfId}-${Date.now()}-${crypto.getRandomValues(new Uint32Array(1))[0]}`;
-const safe=s=>s.trim().replace(/[^a-zA-Z0-9_-]/g,'').slice(0,50);
-const randomRoom=()=>`drop-${crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}`;
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+const APP_ID = 'peerdrop-upes-p2p-files-v2';
+const MAX = 2 * 1024 * 1024 * 1024;
+const CHUNK = 48 * 1024;
+const $ = id => document.getElementById(id);
+const S = {room:null,id:'',name:'',peers:new Map(),a:{},incoming:new Map(),transfers:new Map(),cancelled:new Set()};
+const uid = () => `${selfId}-${Date.now()}-${crypto.getRandomValues(new Uint32Array(1))[0]}`;
+const safe = s => s.trim().replace(/[^a-zA-Z0-9_-]/g,'').slice(0,50);
+const randomRoom = () => `drop-${crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}`;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 function size(n){if(n<1024)return n+' B';if(n<1048576)return(n/1024).toFixed(1)+' KB';if(n<1073741824)return(n/1048576).toFixed(1)+' MB';return(n/1073741824).toFixed(2)+' GB'}
 function toast(s){const e=$('toast');e.textContent=s;e.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('show'),2200)}
 function state(kind,label){$('signalDot').className='signal-dot '+kind;$('badge').textContent=label}
@@ -13,10 +18,73 @@ function transfer(id,name,total,direction){$('empty')?.remove();const el=documen
 async function cancelTransfer(id,direction){const t=S.transfers.get(id);if(!t||S.cancelled.has(id))return;S.cancelled.add(id);t.el.classList.add('cancelled');t.fill.style.width='0%';t.pct.textContent='Cancelled';t.stat.textContent='Transfer cancelled';t.cancel?.remove();S.incoming.delete(id);try{await S.a.cancelAction?.send({id})}catch{}toast(direction==='Sending'?'File sending cancelled':'File receiving cancelled')}
 function duration(sec){if(!Number.isFinite(sec)||sec<0)return 'calculating…';if(sec<60)return Math.ceil(sec)+' sec';if(sec<3600)return Math.floor(sec/60)+'m '+Math.ceil(sec%60)+'s';return Math.floor(sec/3600)+'h '+Math.ceil((sec%3600)/60)+'m'}
 function progress(id,n,text){const t=S.transfers.get(id);if(!t)return;const now=performance.now(),elapsed=Math.max((now-t.started)/1000,.001);const instant=(n-t.lastBytes)/Math.max((now-t.lastAt)/1000,.001);if(now-t.lastAt>350){t.speed=t.speed?t.speed*.72+instant*.28:instant;t.lastAt=now;t.lastBytes=n}const avg=n/elapsed,rate=t.speed||avg,remaining=Math.max(0,t.total-n),eta=rate>0?remaining/rate:Infinity;const p=Math.min(100,Math.round(n/t.total*100));t.fill.style.width=p+'%';t.pct.textContent=p+'%';const speedText=rate>0?size(rate)+'/s':'calculating speed…';const etaText=p>=100?'Completed':('ETA '+duration(eta));t.stat.textContent=(text||'Transferring…')+' • '+speedText+' • '+etaText}
-function setup(){const r=S.room;const nameAction=r.makeAction('name');const metaAction=r.makeAction('file-meta');const chunkAction=r.makeAction('file-chunk');const cancelAction=r.makeAction('file-cancel');S.a={nameAction,metaAction,chunkAction,cancelAction};cancelAction.onMessage=(m)=>{if(!m?.id)return;S.cancelled.add(m.id);S.incoming.delete(m.id);const t=S.transfers.get(m.id);if(t){t.el.classList.add('cancelled');t.fill.style.width='0%';t.pct.textContent='Cancelled';t.stat.textContent='Cancelled by peer';t.cancel?.remove()}toast('Peer cancelled a transfer')};nameAction.onMessage=(n,{peerId:p})=>{S.peers.set(p,String(n).slice(0,30));peers()};metaAction.onMessage=(m,{peerId:p})=>{if(!m?.id||typeof m.name!=='string'||m.size<0||m.size>MAX)return;S.incoming.set(m.id,{meta:m,parts:[],got:0,peer:p});transfer(m.id,m.name,m.size,'Receiving')};chunkAction.onMessage=(d,{peerId:p})=>{if(S.cancelled.has(d?.id))return;const x=S.incoming.get(d?.id);if(!x||x.peer!==p||!d.chunk)return;const b=d.chunk instanceof Uint8Array?d.chunk:new Uint8Array(d.chunk);x.parts.push(b);x.got+=b.byteLength;progress(d.id,x.got,'Receiving directly from peer…');if(d.last){const blob=new Blob(x.parts,{type:x.meta.type||'application/octet-stream'});const t=S.transfers.get(d.id);const a=document.createElement('a');a.className='download';a.href=URL.createObjectURL(blob);a.download=x.meta.name;a.textContent='Download file';t.el.append(a);progress(d.id,x.meta.size||1,'Received — ready to download');t.cancel?.remove();S.incoming.delete(d.id);toast(`${x.meta.name} received`)}};r.onPeerJoin=p=>{nameAction.send(S.name,{target:p});peers();toast('A peer connected')};r.onPeerLeave=p=>{S.peers.delete(p);peers();toast('A peer disconnected')}}
-async function join(){const name=$('name').value.trim(),id=safe($('room').value),password=$('password').value;$('error').textContent='';if(!name||!id){$('error').textContent='Enter your name and a room ID.';return}if(location.protocol==='file:'){$('error').textContent='Do not open index.html directly. Run it on localhost or deploy it to GitHub Pages (HTTPS).';state('error','Needs HTTPS');return}try{state('connecting','Connecting…');S.name=name.slice(0,30);S.id=id;S.room=joinRoom({appId:APP_ID,password:password||undefined},id);setup();localStorage.setItem('peerdrop-name',S.name);localStorage.setItem('peerdrop-room',id);$('joinView').classList.add('hidden');$('app').classList.remove('hidden');$('roomLabel').textContent=id;peers()}catch(e){state('error','Connection error');$('error').textContent='Could not join the room. Check internet access and try the deployed HTTPS version. '+(e?.message||'')}}
-async function send(file){if(!file)return;if(file.size>MAX){toast(`${file.name}: maximum size is 2 GB`);return}if(!S.peers.size){toast('Connect another device to this room first');return}const id=uid(),m={id,name:file.name.slice(0,180),size:file.size,type:file.type};transfer(id,m.name,file.size,'Sending');await S.a.metaAction.send(m);if(file.size===0){await S.a.chunkAction.send({id,chunk:new Uint8Array(0),last:true});progress(id,1,'Sent directly to peer');return}let sent=0;for(let offset=0;offset<file.size;offset+=CHUNK){if(S.cancelled.has(id))return;const ab=await file.slice(offset,Math.min(offset+CHUNK,file.size)).arrayBuffer();const c=new Uint8Array(ab);sent+=c.byteLength;await S.a.chunkAction.send({id,chunk:c,last:sent>=file.size});progress(id,sent,'Sending directly to peer…');if(sent%(CHUNK*32)===0)await sleep(0)}if(S.cancelled.has(id))return;progress(id,file.size,'Sent directly to connected peer(s)');S.transfers.get(id)?.cancel?.remove();toast(`${file.name} sent`)}
-$('join').onclick=join;$('random').onclick=()=>{$('room').value=randomRoom()};$('file').onchange=async e=>{for(const f of e.target.files)await send(f);e.target.value=''};$('copy').onclick=async()=>{const u=new URL(location.href);u.searchParams.set('room',S.id);try{await navigator.clipboard.writeText(u.toString());toast('Invite link copied')}catch{prompt('Copy this invite link:',u.toString())}};$('leave').onclick=async()=>{await S.room?.leave();location.reload()};$('clear').onclick=()=>{S.transfers.clear();$('transfers').innerHTML='<div id="empty" class="empty"><div>↔</div><b>No transfers yet</b><span>Connect another device, then choose a file.</span></div>'};const dz=$('dropzone');['dragenter','dragover'].forEach(x=>dz.addEventListener(x,e=>{e.preventDefault();dz.classList.add('drag')}));['dragleave','drop'].forEach(x=>dz.addEventListener(x,e=>{e.preventDefault();dz.classList.remove('drag')}));dz.addEventListener('drop',async e=>{for(const f of e.dataTransfer.files)await send(f)});const q=new URLSearchParams(location.search);$('name').value=localStorage.getItem('peerdrop-name')||'MD Ejaz';$('room').value=q.get('room')||localStorage.getItem('peerdrop-room')||'';if(!$('room').value)$('room').value=randomRoom();if(location.protocol==='file:'){state('error','Needs HTTPS');$('error').textContent='This app needs to be served, not opened as a local file. Deploy to GitHub Pages or run a local web server.'}
+
+function failTransfer(id,msg){const t=S.transfers.get(id);if(t){t.el.classList.add('cancelled');t.pct.textContent='Failed';t.stat.textContent=msg;t.cancel?.remove()}S.incoming.delete(id);toast(msg)}
+function finishIncoming(id){const x=S.incoming.get(id);if(!x||S.cancelled.has(id))return;if(x.got!==x.meta.size){failTransfer(id,`Transfer incomplete (${size(x.got)} / ${size(x.meta.size)})`);return}const blob=new Blob(x.parts,{type:x.meta.type||'application/octet-stream'});if(blob.size!==x.meta.size){failTransfer(id,'File verification failed — please resend');return}const t=S.transfers.get(id);if(!t)return;const a=document.createElement('a');a.className='download';a.href=URL.createObjectURL(blob);a.download=x.meta.name;a.textContent=`Download file (${size(blob.size)})`;t.el.append(a);progress(id,x.meta.size||1,'Received — ready to download');t.cancel?.remove();S.incoming.delete(id);toast(`${x.meta.name} received`)}
+
+function setup(){
+  const r=S.room;
+  const nameAction=r.makeAction('name');
+  const metaAction=r.makeAction('file-meta');
+  const chunkAction=r.makeAction('file-chunk');
+  const cancelAction=r.makeAction('file-cancel');
+  S.a={nameAction,metaAction,chunkAction,cancelAction};
+
+  cancelAction.onMessage=m=>{if(!m?.id)return;S.cancelled.add(m.id);S.incoming.delete(m.id);const t=S.transfers.get(m.id);if(t){t.el.classList.add('cancelled');t.fill.style.width='0%';t.pct.textContent='Cancelled';t.stat.textContent='Cancelled by peer';t.cancel?.remove()}toast('Peer cancelled a transfer')};
+  nameAction.onMessage=(n,{peerId:p})=>{S.peers.set(p,String(n).slice(0,30));peers()};
+  metaAction.onMessage=(m,{peerId:p})=>{if(!m?.id||typeof m.name!=='string'||typeof m.size!=='number'||m.size<0||m.size>MAX)return;S.cancelled.delete(m.id);S.incoming.set(m.id,{meta:m,parts:[],got:0,peer:p});transfer(m.id,m.name,m.size,'Receiving');if(m.size===0)finishIncoming(m.id)};
+
+  // IMPORTANT: file bytes are sent as raw binary. Trystero handles the
+  // WebRTC serialization/backpressure; transfer identity lives in metadata.
+  chunkAction.onMessage=(data,{peerId:p,metadata})=>{
+    const id=metadata?.id;
+    if(!id||S.cancelled.has(id))return;
+    const x=S.incoming.get(id);
+    if(!x||x.peer!==p)return;
+    let b;
+    if(data instanceof ArrayBuffer)b=new Uint8Array(data);
+    else if(data instanceof Uint8Array)b=data;
+    else if(ArrayBuffer.isView(data))b=new Uint8Array(data.buffer,data.byteOffset,data.byteLength);
+    else return;
+    const copy=new Uint8Array(b.byteLength);copy.set(b);
+    x.parts.push(copy);x.got+=copy.byteLength;
+    if(x.got>x.meta.size){failTransfer(id,'Received more data than expected — please resend');return}
+    progress(id,x.got,'Receiving directly from peer…');
+    if(metadata.last===true)finishIncoming(id);
+  };
+
+  r.onPeerJoin=p=>{nameAction.send(S.name,{target:p});peers();toast('A peer connected')};
+  r.onPeerLeave=p=>{S.peers.delete(p);peers();toast('A peer disconnected')};
+}
+
+async function join(){const name=$('name').value.trim(),id=safe($('room').value),password=$('password').value;$('error').textContent='';if(!name||!id){$('error').textContent='Enter your name and a room ID.';return}if(location.protocol==='file:'){$('error').textContent='Do not open index.html directly. Run it on localhost or deploy it to GitHub Pages (HTTPS).';state('error','Needs HTTPS');return}try{state('connecting','Connecting…');S.name=name.slice(0,30);S.id=id;S.room=joinRoom({appId:APP_ID,password:password||undefined,maxReceiveBytes:MAX},id);setup();localStorage.setItem('peerdrop-name',S.name);localStorage.setItem('peerdrop-room',id);$('joinView').classList.add('hidden');$('app').classList.remove('hidden');$('roomLabel').textContent=id;peers()}catch(e){state('error','Connection error');$('error').textContent='Could not join the room. Check internet access and try the deployed HTTPS version. '+(e?.message||'')}}
+
+async function send(file){
+  if(!file)return;
+  if(file.size>MAX){toast(`${file.name}: maximum size is 2 GB`);return}
+  if(!S.peers.size){toast('Connect another device to this room first');return}
+  const id=uid(),m={id,name:file.name.slice(0,180),size:file.size,type:file.type||'application/octet-stream'};
+  S.cancelled.delete(id);transfer(id,m.name,file.size,'Sending');
+  try{
+    await S.a.metaAction.send(m);
+    if(file.size===0){progress(id,1,'Sent directly to connected peer(s)');S.transfers.get(id)?.cancel?.remove();toast(`${file.name} sent`);return}
+    await sleep(80);
+    let sent=0;
+    for(let offset=0;offset<file.size;offset+=CHUNK){
+      if(S.cancelled.has(id))return;
+      const end=Math.min(offset+CHUNK,file.size);
+      const chunk=new Uint8Array(await file.slice(offset,end).arrayBuffer());
+      const last=end>=file.size;
+      await S.a.chunkAction.send(chunk,{metadata:{id,last}});
+      sent=end;progress(id,sent,'Sending directly to peer…');
+      if(sent%(CHUNK*16)===0)await sleep(0);
+    }
+    if(S.cancelled.has(id))return;
+    progress(id,file.size,'Sent directly to connected peer(s)');S.transfers.get(id)?.cancel?.remove();toast(`${file.name} sent`);
+  }catch(e){console.error('PeerDrop transfer failed',e);failTransfer(id,'Transfer failed — reconnect and try again')}
+}
+
+$('join').onclick=join;$('random').onclick=()=>{$('room').value=randomRoom()};$('file').onchange=async e=>{for(const f of e.target.files)await send(f);e.target.value=''};$('copy').onclick=async()=>{const u=new URL(location.href);u.searchParams.set('room',S.id);try{await navigator.clipboard.writeText(u.toString());toast('Invite link copied')}catch{prompt('Copy this invite link:',u.toString())}};$('leave').onclick=async()=>{await S.room?.leave();location.reload()};$('clear').onclick=()=>{for(const x of S.incoming.values())x.parts.length=0;S.incoming.clear();S.transfers.clear();$('transfers').innerHTML='<div id="empty" class="empty"><div>↔</div><b>No transfers yet</b><span>Connect another device, then choose a file.</span></div>'};const dz=$('dropzone');['dragenter','dragover'].forEach(x=>dz.addEventListener(x,e=>{e.preventDefault();dz.classList.add('drag')}));['dragleave','drop'].forEach(x=>dz.addEventListener(x,e=>{e.preventDefault();dz.classList.remove('drag')}));dz.addEventListener('drop',async e=>{for(const f of e.dataTransfer.files)await send(f)});const q=new URLSearchParams(location.search);$('name').value=localStorage.getItem('peerdrop-name')||'';$('room').value=q.get('room')||localStorage.getItem('peerdrop-room')||'';if(!$('room').value)$('room').value=randomRoom();if(location.protocol==='file:'){state('error','Needs HTTPS');$('error').textContent='This app needs to be served, not opened as a local file. Deploy to GitHub Pages or run a local web server.'}
 
 // Nature-inspired drifting leaves, particles and cursor tail
 const canvas=document.getElementById('particles');
