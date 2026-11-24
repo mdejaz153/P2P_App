@@ -1,5 +1,4 @@
 import { joinRoom, selfId } from 'https://esm.run/trystero@0.26.0';
-
 const APP_ID = 'peerdrop-upes-p2p-files-v2';
 const MAX = 2 * 1024 * 1024 * 1024;
 const CHUNK = 48 * 1024;
