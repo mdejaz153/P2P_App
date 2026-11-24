@@ -1,0 +1,26 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#173f35"><title>PeerDrop - Secure P2P File Sharing</title><link rel="stylesheet" href="style.css"></head><body>
+<canvas id="particles"></canvas><div class="grain"></div><div class="cursor-dot"></div><div class="cursor-tail"></div>
+<div class="shell"><header><div class="brand"><div class="logo">P</div><div><h1>PeerDrop</h1><p>Secure decentralised browser-to-browser file sharing</p></div></div><div class="connection"><span id="signalDot" class="signal-dot idle"></span><span id="badge" class="badge">Ready</span></div></header>
+<section id="joinView" class="showcase-stage card">
+  <div class="showcase-backdrop">
+    <div class="showcase-nav"><span class="nav-brand">PEERDROP / 01</span><span>PRIVATE TRANSFER</span><span>WEBRTC</span><span>NO CLOUD</span></div>
+    <div class="showcase-title"><span>MOVE FILES</span><strong>PEER TO PEER.</strong></div>
+    <div class="showcase-copy">A direct browser-to-browser file path.<br>The relay introduces. WebRTC delivers.</div>
+    <div class="showcase-tags"><span>END-TO-END ENCRYPTED</span><span>UP TO 2 GB</span><span>DIRECT P2P</span></div>
+  </div>
+  <div class="device-base"></div>
+  <div class="join-float">
+    <div class="float-top"><div><span class="console-kicker">PRIVATE ACCESS</span><h3>Connect a device</h3></div><div class="secure-mark">P2P</div></div>
+    <div class="form">
+      <label>Your display name<input id="name" maxlength="30" autocomplete="name" value="MD Ejaz" placeholder="Your name"></label>
+      <label>Room ID<div class="inline"><input id="room" maxlength="50" autocomplete="off" placeholder="drop-x7k2"><button id="random" class="ghost" type="button">↻</button></div></label>
+      <label>Room password <span class="optional">recommended</span><input id="password" type="password" maxlength="60" autocomplete="new-password" placeholder="Same on every device"></label>
+      <button id="join" class="primary">Enter PeerDrop <span>→</span></button><p id="error" class="error"></p>
+    </div>
+    <div class="float-foot"><i></i><span>Ready for a private connection</span></div>
+  </div>
+  <div class="mini-card"><span>01</span><b>No file server.</b><p>Your file data stays between connected browsers.</p></div>
+</section>
+<main id="app" class="hidden"><section class="grid"><aside class="card side"><div><span class="eyebrow">PRIVATE ROOM</span><div class="room-line"><code id="roomLabel"></code><span id="count" class="count">1</span></div></div><button id="copy" class="ghost full">🔗 Copy invite link</button><div class="side-title">Connected devices</div><ul id="peers"></ul><div id="connectionHelp" class="help"><b>Waiting for a peer?</b><span>Open the invite link on another device and use the same password. For best results, test the deployed HTTPS GitHub Pages site.</span></div><div class="privacy"><b>🔒 Privacy first</b><span>PeerDrop does not upload your files to an application server or database.</span></div><button id="leave" class="danger full">Leave room</button></aside>
+<section class="card workspace"><div class="workspace-head"><div><span class="eyebrow">DIRECT TRANSFER</span><h2>Send files instantly</h2><p id="status" class="muted">Preparing peer connection…</p></div><div id="p2pPill" class="p2p-pill"><i></i><span>Waiting</span></div></div><label id="dropzone" class="drop"><input id="file" type="file" multiple><div class="dropicon">⇧</div><h3>Drop files here</h3><p>or click to browse from this device</p><span>Up to 2 GB per file • files travel directly to connected peers</span></label><div class="section-title"><div><h3>Transfer activity</h3><span class="muted tiny">Live progress from this session</span></div><button id="clear" class="linkbtn">Clear list</button></div><div id="transfers" class="transfers"><div id="empty" class="empty"><div>↔</div><b>No transfers yet</b><span>Connect another device, then choose a file.</span></div></div></section></section></main>
+</div><div id="toast" class="toast"></div><script type="module" src="app.js"></script></body></html>

@@ -1,0 +1,7 @@
+{
+  "name": "peerdrop-p2p-file-sharing",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {"dev":"npx serve .", "check":"node --check app.js"},
+  "description": "Decentralized WebRTC P2P file sharing app for GitHub Pages; optional support API for Vercel."
+}
